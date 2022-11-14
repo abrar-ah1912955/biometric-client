@@ -6,7 +6,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Face Detection</title>
-
+    <script src="https://cdn.jsdelivr.net/gh/cgarciagl/face-api.js@0.22.2/dist/face-api.min.js"></script>
     <style>
         .camera {
             background-color: #ececec;
@@ -17,7 +17,15 @@
         }
 
         .photo {
-            background-color: aqua;
+            display: block;
+            box-shadow: rgba(149, 157, 165, 0.2) 0px 8px 24px;
+            height: 200px;
+        }
+
+        .output {
+            display: flex;
+            padding: 1rem 2rem;
+            justify-content: center;
         }
     </style>
 </head>
@@ -27,10 +35,21 @@
         <div class="camera">
             <video id="video">Video stream not available.</video>
             <button id="startbutton">Take photo</button>
+            <button id="stopButton">Stop video</button>
+            <button id="startButton">Start video</button>
+            <button id="check">Check</button>
+
         </div>
-        <canvas id="canvas"> </canvas>
+        <canvas id="canvas" style="display: none;"> </canvas>
         <div class="output">
-            <img id="photo" alt="The screen capture will appear in this box." />
+            <div>
+                <p>Current Image:</p>
+                <img id="photo" class="photo" alt="The second screen capture will appear in this box." />
+            </div>
+            <div>
+                <p>Reference Image:</p>
+                <img id="refPhoto" class="photo" alt="The screen capture will appear in this box." />
+            </div>
         </div>
         <p>
             Visit MDN's article
@@ -61,6 +80,7 @@
             let video = null;
             let canvas = null;
             let photo = null;
+            let refPhoto = null;
             let startbutton = null;
 
             function showViewLiveResultButton() {
@@ -85,6 +105,7 @@
                 video = document.getElementById("video");
                 canvas = document.getElementById("canvas");
                 photo = document.getElementById("photo");
+                refPhoto = document.getElementById("refPhoto");
                 startbutton = document.getElementById("startbutton");
 
                 navigator.mediaDevices
@@ -150,7 +171,7 @@
             // drawing that to the screen, we can change its size and/or apply
             // other changes before drawing it.
 
-            function takepicture() {
+            async function takepicture() {
                 const context = canvas.getContext("2d");
                 if (width && height) {
                     canvas.width = width;
@@ -159,6 +180,37 @@
 
                     const data = canvas.toDataURL("image/png");
                     photo.setAttribute("src", data);
+                    if (!refPhoto.getAttribute("src")) refPhoto.setAttribute("src", data);
+                    else {
+                        const MODEL_URL = '/models'
+
+                        await faceapi.loadSsdMobilenetv1Model(MODEL_URL)
+                        await faceapi.loadFaceLandmarkModel(MODEL_URL)
+                        await faceapi.loadFaceRecognitionModel(MODEL_URL)
+                        const results = await faceapi
+                            .detectAllFaces(refPhoto)
+                            .withFaceLandmarks()
+                            .withFaceDescriptors()
+
+                        if (!results.length) {
+                            return
+                        }
+
+                        // create FaceMatcher with automatically assigned labels
+                        // from the detection results for the reference image
+                        const maxDescriptorDistance = 0.5
+                        const faceMatcher = new faceapi.FaceMatcher(results, maxDescriptorDistance)
+
+                        const singleResult = await faceapi
+                            .detectSingleFace(photo)
+                            .withFaceLandmarks()
+                            .withFaceDescriptor()
+
+                        if (singleResult) {
+                            const bestMatch = faceMatcher.findBestMatch(singleResult.descriptor)
+                            console.log(bestMatch.toString())
+                        }
+                    }
                 } else {
                     clearphoto();
                 }
